@@ -506,187 +506,186 @@ class Admin extends AdminModule
       exit();
     }
 
-    public function getRiwayatPerawatanXXX($no_rkm_medis)
-    {
-      $reg_periksa = $this->db('reg_periksa')
-        ->join('poliklinik', 'poliklinik.kd_poli=reg_periksa.kd_poli')
-        ->join('dokter', 'dokter.kd_dokter=reg_periksa.kd_dokter')
-        ->join('penjab', 'penjab.kd_pj=reg_periksa.kd_pj')
-        ->where('no_rkm_medis', $no_rkm_medis)
-        ->desc('tgl_registrasi')
-        ->toArray();
-      echo json_encode($reg_periksa, true);
-      exit();
-    }
-
     public function getRiwayatPerawatan($no_rkm_medis)
     {
-      $riwayat['settings'] = $this->settings('settings');
-      $riwayat['pasien'] = $this->db('pasien')->where('no_rkm_medis', $no_rkm_medis)->oneArray();
-      $reg_periksa = $this->db('reg_periksa')
-        ->join('poliklinik', 'poliklinik.kd_poli=reg_periksa.kd_poli')
-        ->join('dokter', 'dokter.kd_dokter=reg_periksa.kd_dokter')
-        ->join('penjab', 'penjab.kd_pj=reg_periksa.kd_pj')
-        ->where('no_rkm_medis', $no_rkm_medis)
-        ->desc('tgl_registrasi')
-        ->toArray();
+        $riwayat['settings'] = $this->settings('settings');
+        $riwayat['pasien'] = $this->db('pasien')->where('no_rkm_medis', $no_rkm_medis)->oneArray();
+        $reg_periksa = $this->db('reg_periksa')
+            ->join('poliklinik', 'poliklinik.kd_poli=reg_periksa.kd_poli')
+            ->join('dokter', 'dokter.kd_dokter=reg_periksa.kd_dokter')
+            ->join('penjab', 'penjab.kd_pj=reg_periksa.kd_pj')
+            ->where('no_rkm_medis', $no_rkm_medis)
+            ->desc('tgl_registrasi')
+            ->toArray();
+    
+        $riwayat['reg_periksa'] = [];
+        foreach ($reg_periksa as $row) {
+            $row['diagnosa_pasien'] = $this->db('diagnosa_pasien')
+                ->join('penyakit', 'penyakit.kd_penyakit=diagnosa_pasien.kd_penyakit')
+                ->where('no_rawat', $row['no_rawat'])
+                ->asc('prioritas')
+                ->toArray();
+            $row['prosedur_pasien'] = $this->db('prosedur_pasien')
+                ->join('icd9', 'icd9.kode=prosedur_pasien.kode')
+                ->where('no_rawat', $row['no_rawat'])
+                ->asc('prioritas')
+                ->toArray();
+            $row['pemeriksaan_ralan'] = $this->db('pemeriksaan_ralan')->where('no_rawat', $row['no_rawat'])->toArray();
+            $row['rawat_jl_dr'] = isset($row['no_rawat']) ? $this->db('rawat_jl_dr')
+                ->join('jns_perawatan', 'jns_perawatan.kd_jenis_prw=rawat_jl_dr.kd_jenis_prw')
+                ->join('dokter', 'dokter.kd_dokter=rawat_jl_dr.kd_dokter')
+                ->where('no_rawat', $row['no_rawat'])
+                ->toArray() : [];
+            $row['rawat_jl_pr'] = isset($row['no_rawat']) ? $this->db('rawat_jl_pr')
+                ->join('jns_perawatan', 'jns_perawatan.kd_jenis_prw=rawat_jl_pr.kd_jenis_prw')
+                ->join('petugas', 'petugas.nip=rawat_jl_pr.nip')
+                ->where('no_rawat', $row['no_rawat'])
+                ->toArray() : [];
+    
+            // Penambahan kode yang diubah untuk memperbaiki error
+            $rows['rawat_jl_drpr'] = isset($row['no_rawat']) ? $this->db('rawat_jl_drpr')
+                ->join('jns_perawatan', 'jns_perawatan.kd_jenis_prw=rawat_jl_drpr.kd_jenis_prw')
+                ->where('no_rawat', $row['no_rawat'])
+                ->toArray() : [];
+            $row['rawat_jl_drpr'] = [];
+            foreach ($rows['rawat_jl_drpr'] as $rawat) {
+                $dokter = $this->db('dokter')->where('kd_dokter', $rawat['kd_dokter'])->oneArray();
+                $petugas = $this->db('petugas')->where('nip', $rawat['nip'])->oneArray();
+                $rawat['nm_dokter'] = $dokter['nm_dokter'];
+                $rawat['nama'] = $petugas['nama'];
+                $row['rawat_jl_drpr'][] = $rawat;
+            }
+    
+            // Sisipkan kode yang diubah untuk memperbaiki error
+            $row['pemeriksaan_ranap'] = [];
+            $row['rawat_inap_dr'] = [];
+            $row['rawat_inap_pr'] = [];
+            $row['rawat_inap_drpr'] = [];
+            $check_table = $this->db()->pdo()->query("SHOW TABLES LIKE 'pemeriksaan_ranap'");
+            $check_table->execute();
+            $check_table = $check_table->fetch();
+            if ($check_table) {
+                $row['pemeriksaan_ranap'] = $this->db('pemeriksaan_ranap')->where('no_rawat', $row['no_rawat'])->toArray();
+                $row['rawat_inap_dr'] = $this->db('rawat_inap_dr')
+                    ->join('jns_perawatan_inap', 'jns_perawatan_inap.kd_jenis_prw=rawat_inap_dr.kd_jenis_prw')
+                    ->join('dokter', 'dokter.kd_dokter=rawat_inap_dr.kd_dokter')
+                    ->where('no_rawat', $row['no_rawat'])
+                    ->toArray();
+                $row['rawat_inap_pr'] = $this->db('rawat_inap_pr')
+                    ->join('jns_perawatan_inap', 'jns_perawatan_inap.kd_jenis_prw=rawat_inap_pr.kd_jenis_prw')
+                    ->join('petugas', 'petugas.nip=rawat_inap_pr.nip')
+                    ->where('no_rawat', $row['no_rawat'])
+                    ->toArray();
+                $rows['rawat_inap_drpr'] = $this->db('rawat_inap_drpr')
+                    ->join('jns_perawatan_inap', 'jns_perawatan_inap.kd_jenis_prw=rawat_inap_drpr.kd_jenis_prw')
+                    ->where('no_rawat', $row['no_rawat'])
+                    ->toArray();
+                foreach ($rows['rawat_inap_drpr'] as $rawat) {
+                    $dokter = $this->db('dokter')->where('kd_dokter', $rawat['kd_dokter'])->oneArray();
+                    $petugas = $this->db('petugas')->where('nip', $rawat['nip'])->oneArray();
+                    $rawat['nm_dokter'] = $dokter['nm_dokter'];
+                    $rawat['nama'] = $petugas['nama'];
+                    $row['rawat_inap_drpr'][] = $rawat;
+                }
+            }
+    
+            // Sisipkan kode yang diubah untuk memperbaiki error
+            $rows_periksa_lab = $this->db('periksa_lab')
+                ->join('jns_perawatan_lab', 'jns_perawatan_lab.kd_jenis_prw=periksa_lab.kd_jenis_prw')
+                ->where('no_rawat', $row['no_rawat'])
+                ->toArray();
+            $row['periksa_lab'] = [];
+            foreach ($rows_periksa_lab as $periksa_lab) {
+                $periksa_lab['detail_periksa_lab'] = $this->db('detail_periksa_lab')
+                    ->join('template_laboratorium', 'template_laboratorium.id_template=detail_periksa_lab.id_template')
+                    ->where('detail_periksa_lab.no_rawat', $periksa_lab['no_rawat'])
+                    ->where('detail_periksa_lab.kd_jenis_prw', $periksa_lab['kd_jenis_prw'])
+                    ->where('tgl_periksa', $periksa_lab['tgl_periksa'])
+                    ->where('jam', $periksa_lab['jam'])
+                    ->toArray();
+                $row['periksa_lab'][] = $periksa_lab;
+            }
+    
+            // Sisipkan kode yang diubah untuk memperbaiki error
+            $row['periksa_radiologi'] = [];
+            $rows_radiologi = $this->db('periksa_radiologi')
+                ->where('periksa_radiologi.no_rawat', $row['no_rawat'])
+                ->group('tgl_periksa')
+                ->group('jam')
+                ->toArray();
+            foreach ($rows_radiologi as $radiologi) {
+                $radiologi['pemeriksaan_radiologi'] = $this->db('periksa_radiologi')
+                    ->join('jns_perawatan_radiologi', 'jns_perawatan_radiologi.kd_jenis_prw=periksa_radiologi.kd_jenis_prw')
+                    ->where('no_rawat', $radiologi['no_rawat'])
+                    ->where('tgl_periksa', $radiologi['tgl_periksa'])
+                    ->where('jam', $radiologi['jam'])
+                    ->toArray();
+                $radiologi['hasil_radiologi'] = $this->db('hasil_radiologi')
+                    ->where('no_rawat', $radiologi['no_rawat'])
+                    ->where('tgl_periksa', $radiologi['tgl_periksa'])
+                    ->where('jam', $radiologi['jam'])
+                    ->toArray();
+                $radiologi['gambar_radiologi'] = $this->db('gambar_radiologi')
+                    ->where('no_rawat', $radiologi['no_rawat'])
+                    ->where('tgl_periksa', $radiologi['tgl_periksa'])
+                    ->where('jam', $radiologi['jam'])
+                    ->toArray();
+                $row['periksa_radiologi'][] = $radiologi;
+            }
+    
+            // Sisipkan kode yang diubah untuk memperbaiki error
+            $detail_pemberian_obat = $this->db('detail_pemberian_obat')
+                ->where('no_rawat', $row['no_rawat'])
+                ->group('tgl_perawatan')
+                ->group('jam')
+                ->toArray();
+            $row['pemberian_obat'] = [];
+            foreach ($detail_pemberian_obat as $pemberian_obat) {
+                $pemberian_obat['data_pemberian_obat'] = $this->db('detail_pemberian_obat')
+                    ->join('databarang', 'databarang.kode_brng=detail_pemberian_obat.kode_brng')
+                    ->where('detail_pemberian_obat.no_rawat', $pemberian_obat['no_rawat'])
+                    ->where('detail_pemberian_obat.tgl_perawatan', $pemberian_obat['tgl_perawatan'])
+                    ->where('detail_pemberian_obat.jam', $pemberian_obat['jam'])
+                    ->toArray();
+                $row['pemberian_obat'][] = $pemberian_obat;
+            }
+    
+            // Sisipkan kode yang diubah untuk memperbaiki error
+            $row['operasi'] = $this->db('operasi')
+                ->join('paket_operasi', 'paket_operasi.kode_paket=operasi.kode_paket')
+                ->where('no_rawat', $row['no_rawat'])
+                ->toArray();
+            $row['obat_operasi'] = $this->db('beri_obat_operasi')
+                ->join('obatbhp_ok', 'obatbhp_ok.kd_obat=beri_obat_operasi.kd_obat')
+                ->where('no_rawat', $row['no_rawat'])
+                ->toArray();
+    
+            $row['catatan_perawatan'] = $this->db('catatan_perawatan')->where('no_rawat', $row['no_rawat'])->oneArray();
+            $row['berkas_digital'] = $this->db('berkas_digital_perawatan')
+                ->join('master_berkas_digital', 'master_berkas_digital.kode=berkas_digital_perawatan.kode')
+                ->where('no_rawat', $row['no_rawat'])
+                ->toArray();
+    
+            // Sisipkan kode yang diubah untuk memperbaiki error
+            $row['penilaian_medis_ralan'] = $this->db('penilaian_medis_ralan')
+                ->join('dokter', 'dokter.kd_dokter=penilaian_medis_ralan.kd_dokter')
+                ->where('no_rawat', $row['no_rawat'])
+                ->toArray();
 
-      $riwayat['reg_periksa'] = [];
-      foreach ($reg_periksa as $row) {
 
-        $row['diagnosa_pasien'] = $this->db('diagnosa_pasien')
-          ->join('penyakit', 'penyakit.kd_penyakit=diagnosa_pasien.kd_penyakit')
-          ->where('no_rawat', $row['no_rawat'])
-          ->asc('prioritas')
-          ->toArray();
-        $row['prosedur_pasien'] = $this->db('prosedur_pasien')
-          ->join('icd9', 'icd9.kode=prosedur_pasien.kode')
-          ->where('no_rawat', $row['no_rawat'])
-          ->asc('prioritas')
-          ->toArray();
-        $row['pemeriksaan_ralan'] = $this->db('pemeriksaan_ralan')->where('no_rawat', $row['no_rawat'])->toArray();
-        $row['rawat_jl_dr'] = $this->db('rawat_jl_dr')
-          ->join('jns_perawatan', 'jns_perawatan.kd_jenis_prw=rawat_jl_dr.kd_jenis_prw')
-          ->join('dokter', 'dokter.kd_dokter=rawat_jl_dr.kd_dokter')
-          ->where('no_rawat', $row['no_rawat'])
-          ->toArray();
-        $row['rawat_jl_pr'] = $this->db('rawat_jl_pr')
-          ->join('jns_perawatan', 'jns_perawatan.kd_jenis_prw=rawat_jl_pr.kd_jenis_prw')
-          ->join('petugas', 'petugas.nip=rawat_jl_pr.nip')
-          ->where('no_rawat', $row['no_rawat'])
-          ->toArray();
-        $rows['rawat_jl_drpr'] = $this->db('rawat_jl_drpr')
-          ->join('jns_perawatan', 'jns_perawatan.kd_jenis_prw=rawat_jl_drpr.kd_jenis_prw')
-          ->where('no_rawat', $row['no_rawat'])
-          ->toArray();
-        $row['rawat_jl_drpr'] = [];
-        foreach ($rows['rawat_jl_drpr'] as $row2) {
-          $dokter = $this->db('dokter')->where('kd_dokter', $row2['kd_dokter'])->oneArray();
-          $petugas = $this->db('petugas')->where('nip', $row2['nip'])->oneArray();
-          $row2['nm_dokter'] = $dokter['nm_dokter'];
-          $row2['nama'] = $petugas['nama'];
-          $row['rawat_jl_drpr'][] = $row2;
+            //penilaian medis kebidanan///
+            $row['penilaian_medis_ralan_kandungan'] = $this->db('penilaian_medis_ralan_kandungan')
+                ->join('dokter', 'dokter.kd_dokter=penilaian_medis_ralan_kandungan.kd_dokter')
+                ->where('no_rawat', $row['no_rawat'])
+                ->toArray();
+    
+            $riwayat['reg_periksa'][] = $row;
         }
-        $row['pemeriksaan_ranap'] = [];
-        $row['rawat_inap_dr'] = [];
-        $row['rawat_inap_pr'] = [];
-        $row['rawat_inap_drpr'] = [];
-        $check_table = $this->db()->pdo()->query("SHOW TABLES LIKE 'pemeriksaan_ranap'");
-        $check_table->execute();
-        $check_table = $check_table->fetch();
-        if($check_table) {
-          $row['pemeriksaan_ranap'] = $this->db('pemeriksaan_ranap')->where('no_rawat', $row['no_rawat'])->toArray();
-          $row['rawat_inap_dr'] = $this->db('rawat_inap_dr')
-            ->join('jns_perawatan_inap', 'jns_perawatan_inap.kd_jenis_prw=rawat_inap_dr.kd_jenis_prw')
-            ->join('dokter', 'dokter.kd_dokter=rawat_inap_dr.kd_dokter')
-            ->where('no_rawat', $row['no_rawat'])
-            ->toArray();
-          $row['rawat_inap_pr'] = $this->db('rawat_inap_pr')
-            ->join('jns_perawatan_inap', 'jns_perawatan_inap.kd_jenis_prw=rawat_inap_pr.kd_jenis_prw')
-            ->join('petugas', 'petugas.nip=rawat_inap_pr.nip')
-            ->where('no_rawat', $row['no_rawat'])
-            ->toArray();
-          $rows['rawat_inap_drpr'] = $this->db('rawat_inap_drpr')
-            ->join('jns_perawatan_inap', 'jns_perawatan_inap.kd_jenis_prw=rawat_inap_drpr.kd_jenis_prw')
-            ->where('no_rawat', $row['no_rawat'])
-            ->toArray();
-          foreach ($rows['rawat_inap_drpr'] as $row3) {
-            $dokter = $this->db('dokter')->where('kd_dokter', $row3['kd_dokter'])->oneArray();
-            $petugas = $this->db('petugas')->where('nip', $row3['nip'])->oneArray();
-            $row3['nm_dokter'] = $dokter['nm_dokter'];
-            $row3['nama'] = $petugas['nama'];
-            $row['rawat_inap_drpr'][] = $row3;
-          }
-        }
-
-        $rows_periksa_lab = $this->db('periksa_lab')
-          ->join('jns_perawatan_lab', 'jns_perawatan_lab.kd_jenis_prw=periksa_lab.kd_jenis_prw')
-          ->where('no_rawat', $row['no_rawat'])
-          ->toArray();
-
-        $row['periksa_lab'] = [];
-        foreach ($rows_periksa_lab as $value) {
-          $value['detail_periksa_lab'] = $this->db('detail_periksa_lab')
-            ->join('template_laboratorium', 'template_laboratorium.id_template=detail_periksa_lab.id_template')
-            ->where('detail_periksa_lab.no_rawat', $value['no_rawat'])
-            ->where('detail_periksa_lab.kd_jenis_prw', $value['kd_jenis_prw'])
-            ->where('tgl_periksa', $value['tgl_periksa'])
-            ->where('jam', $value['jam'])
-            ->toArray();
-          $row['periksa_lab'][] = $value;
-        }
-
-        $row['periksa_radiologi'] = [];
-        $rows_radiologi = $this->db('periksa_radiologi')
-          ->where('periksa_radiologi.no_rawat', $row['no_rawat'])
-          ->group('tgl_periksa')
-          ->group('jam')
-          ->toArray();
-
-        foreach ($rows_radiologi as $value) {
-          $value['pemeriksaan_radiologi'] = $this->db('periksa_radiologi')
-            ->join('jns_perawatan_radiologi', 'jns_perawatan_radiologi.kd_jenis_prw=periksa_radiologi.kd_jenis_prw')
-            ->where('no_rawat', $value['no_rawat'])
-            ->where('tgl_periksa', $value['tgl_periksa'])
-            ->where('jam', $value['jam'])
-            ->toArray();
-          $value['hasil_radiologi'] = $this->db('hasil_radiologi')
-            ->where('no_rawat', $value['no_rawat'])
-            ->where('tgl_periksa', $value['tgl_periksa'])
-            ->where('jam', $value['jam'])
-            ->toArray();
-          $value['gambar_radiologi'] = $this->db('gambar_radiologi')
-            ->where('no_rawat', $value['no_rawat'])
-            ->where('tgl_periksa', $value['tgl_periksa'])
-            ->where('jam', $value['jam'])
-            ->toArray();
-          $row['periksa_radiologi'][] = $value;
-        }
-
-        $detail_pemberian_obat = $this->db('detail_pemberian_obat')
-          ->where('no_rawat', $row['no_rawat'])
-          ->group('tgl_perawatan')
-          ->group('jam')
-          ->toArray();
-
-        $row['pemberian_obat'] = [];
-        foreach ($detail_pemberian_obat as $row_pemberian_obat) {
-          $row_pemberian_obat['data_pemberian_obat'] = $this->db('detail_pemberian_obat')
-            ->join('databarang', 'databarang.kode_brng=detail_pemberian_obat.kode_brng')
-            ->where('detail_pemberian_obat.no_rawat', $row_pemberian_obat['no_rawat'])
-            ->where('detail_pemberian_obat.tgl_perawatan', $row_pemberian_obat['tgl_perawatan'])
-            ->where('detail_pemberian_obat.jam', $row_pemberian_obat['jam'])
-            ->toArray();
-          $row['pemberian_obat'][] = $row_pemberian_obat;
-        }
-
-        $row['operasi'] = $this->db('operasi')
-          ->join('paket_operasi', 'paket_operasi.kode_paket=operasi.kode_paket')
-          ->where('no_rawat', $row['no_rawat'])
-          ->toArray();
-
-        $row['obat_operasi'] = $this->db('beri_obat_operasi')
-          ->join('obatbhp_ok', 'obatbhp_ok.kd_obat=beri_obat_operasi.kd_obat')
-          ->where('no_rawat', $row['no_rawat'])
-          ->toArray();
-
-        $row['catatan_perawatan'] = $this->db('catatan_perawatan')->where('no_rawat', $row['no_rawat'])->oneArray();
-        $row['berkas_digital'] = $this->db('berkas_digital_perawatan')
-          ->join('master_berkas_digital', 'master_berkas_digital.kode=berkas_digital_perawatan.kode')
-          ->where('no_rawat', $row['no_rawat'])
-          ->toArray();
-
-        $row['penilaian_medis_ralan'] = $this->db('penilaian_medis_ralan')
-        ->join('dokter', 'dokter.kd_dokter=penilaian_medis_ralan.kd_dokter')
-        ->where('no_rawat', $row['no_rawat'])
-        ->toArray();
-
-        $riwayat['reg_periksa'][] = $row;
-      }
-      $this->tpl->set('riwayat', $this->tpl->noParse_array(htmlspecialchars_array($riwayat)));
-      echo $this->draw('riwayat.perawatan.html');
-      exit();
+        $this->tpl->set('riwayat', $this->tpl->noParse_array(htmlspecialchars_array($riwayat)));
+        echo $this->draw('riwayat.perawatan.html');
+        exit();
     }
+    
 
     public function postCetak()
     {
@@ -823,86 +822,19 @@ class Admin extends AdminModule
     public function getPasien()
     {
         // CSS
-        $this->_addHeaderFiles();
         $this->core->addCSS(url('assets/css/jquery-ui.css'));
         $this->core->addCSS(url('assets/css/dataTables.bootstrap.min.css'));
-
+        $this->core->addCSS(url('assets/css/bootstrap-datetimepicker.css'));
         // JS
-        $this->core->addJS(url(MODULES.'/dashboard/js/admin/webcam.js?v={$mlite.version}'));
         $this->core->addJS(url('assets/jscripts/jquery-ui.js'));
         $this->core->addJS(url('assets/jscripts/jquery.dataTables.min.js'));
         $this->core->addJS(url('assets/jscripts/dataTables.bootstrap.min.js'));
+        $this->core->addJS(url('https://datatables.net/media/blog/2017-12-31/dataTables.scrollResize.js'));
+        $this->core->addJS(url('assets/jscripts/moment-with-locales.js'));
+        $this->core->addJS(url('assets/jscripts/bootstrap-datetimepicker.js'));
 
-        $cek_pcare = $this->db('mlite_modules')->where('dir', 'pcare')->oneArray();
-        $usernamePcare = '';
-        if($cek_pcare) {
-          $usernamePcare = $this->settings('pcare', 'usernamePcare');
-        }  
-        $penjab = $this->db('penjab')->where('status', '1')->toArray();
-        $stts_nikah = array('BELUM MENIKAH','MENIKAH','JANDA','DUDHA','JOMBLO');
-        $agama = array('ISLAM', 'KRISTEN', 'PROTESTAN', 'HINDU', 'BUDHA', 'KONGHUCU', 'KEPERCAYAAN');
-        $pnd = array('TS','TK','SD','SMP','SMA','SLTA/SEDERAJAT','D1','D2','D3','D4','S1','S2','S3','-');
-        $keluarga = array('AYAH','IBU','ISTRI','SUAMI','SAUDARA','ANAK');
-  
-        $pasien = [
-          'no_rkm_medis' => '',
-          'nm_pasien' => '',
-          'no_ktp' => '',
-          'jk' => '',
-          'tmp_lahir' => '',
-          'tgl_lahir' => '',
-          'nm_ibu' => '-',
-          'alamat' => '',
-          'gol_darah' => '-',
-          'pekerjaan' => '-',
-          'stts_nikah' => '',
-          'agama' => 'ISLAM',
-          'tgl_daftar' => date('Y-m-d'),
-          'no_tlp' => '',
-          'umur' => '',
-          'pnd' => '-',
-          'keluarga' => '',
-          'namakeluarga' => '-',
-          'kd_pj' => '',
-          'no_peserta' => '',
-          'kd_kel' => '1',
-          'kd_kec' => '1',
-          'kd_kab' => '1',
-          'pekerjaanpj' => '',
-          'alamatpj' => '',
-          'kelurahanpj' => '',
-          'kecamatanpj' => '',
-          'kabupatenpj' => '',
-          'perusahaan_pasien' => '',
-          'suku_bangsa' => '',
-          'bahasa_pasien' => '',
-          'cacat_fisik' => '',
-          'email' => '-',
-          'nip' => '',
-          'kd_prop' => '1',
-          'propinsipj' => '',
-          'propinsi' => ['nm_prop' => '-'],
-          'kabupaten' => ['nm_kab' => '-'],
-          'kecamatan' => ['nm_kec' => '-'],
-          'kelurahan' => ['nm_kel' => '-']
-        ];
-
-        return $this->draw('pasien.html', 
-        [
-          'pasien' => $pasien, 
-          'penjab' => $penjab,
-          'stts_nikah' => $stts_nikah,
-          'agama' => $agama,
-          'pnd' => $pnd,
-          'keluarga' => $keluarga,
-          'no_rkm_medis_baru' => $this->core->setNoRM(),
-          'waapitoken' => $this->settings->get('wagateway.token'),
-          'waapiphonenumber' => $this->settings->get('wagateway.phonenumber'),
-          'admin_mode' => $this->settings->get('settings.admin_mode'), 
-          'urlUploadPhoto' => '',
-          'cek_pcare' => $cek_pcare,
-          'usernamePcare' => $usernamePcare
-        ]);
+        $penjab = $this->db('penjab')->desc('kd_pj')->toArray();
+        return $this->draw('pasien.html', ['penjab' => $penjab]);
     }
     
     public function postDataPasien()
@@ -925,7 +857,7 @@ class Admin extends AdminModule
           7 => 'no_tlp', 
           8 => 'tgl_daftar', 
           9 => 'email'
-        );
+      );
   
         // $start_date = date('Y-m-d');
         $start_date = '1970-01-01';
@@ -1009,53 +941,6 @@ class Admin extends AdminModule
         exit();
       
     } 
-
-    public function getExportPDF()
-    {
-      $query = $_GET['query'];
-      $tgl_awal = $_GET['tgl_awal'];
-      $tgl_akhir = $_GET['tgl_akhir'];
-      $filter = $_GET['filter'];
-
-      $sql = "SELECT * FROM pasien";
-        if(isset($_GET['tgl_awal']) && isset($_GET['tgl_akhir']) && $_GET['tgl_awal'] !='' && $_GET['tgl_akhir'] !='') {
-          $sql .=" WHERE tgl_daftar BETWEEN '$tgl_awal' AND '$tgl_akhir'";
-        }
-        if(isset($_GET['query']) && $_GET['query'] !='') {
-          $sql .=" AND nm_pasien LIKE '%$query%'";
-        }
-        if(isset($_GET['filter']) && $_GET['filter'] !='') {
-          $sql .=" AND kd_pj = '$filter'";
-        }
-      $stmt = $this->db()->pdo()->prepare($sql);
-      $stmt->execute();
-      $rows = $stmt->fetchAll();        
-
-      echo $this->draw('pasien.export.pdf.html', ['pasien' => $rows]);
-
-      $mpdf = new \Mpdf\Mpdf([
-        'mode' => 'utf-8',
-        'orientation' => 'L'
-      ]);
-
-      $mpdf->SetHTMLHeader($this->core->setPrintHeader());
-      $mpdf->SetHTMLFooter($this->core->setPrintFooter());
-            
-      $url = url('admin/tmp/pasien.export.pdf.html');
-      $html = file_get_contents($url);
-      $mpdf->WriteHTML($this->core->setPrintCss(),\Mpdf\HTMLParserMode::HEADER_CSS);
-      $mpdf->WriteHTML($html,\Mpdf\HTMLParserMode::HTML_BODY);
-
-      // Output a PDF file directly to the browser
-      $mpdf->Output();
-      exit();
-    }
-
-    public function getExportXLS()
-    {
-      echo "Cetak XLS";
-      exit();
-    }
 
     public function getJavascript()
     {
